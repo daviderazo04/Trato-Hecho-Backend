@@ -7,14 +7,19 @@ import java.util.Set;
 
 @Entity
 @Table(name = "CONVERSACION")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Conversacion {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "CON_ID")
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Long conId;
 
     @Column(name = "CON_FECHACREACION")

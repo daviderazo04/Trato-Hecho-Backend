@@ -1,5 +1,6 @@
 package com.tratoHecho.backend_trato_hecho.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -7,19 +8,25 @@ import java.util.Set;
 
 @Entity
 @Table(name = "SERVICIO")
-@Data
+@Getter // Usar Getter
+@Setter // Usar Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true) // CLAVE: Solo usar campos explícitos para hashCode/equals
+@ToString(onlyExplicitlyIncluded = true) // Evita StackOverflow en logs
 public class Servicio {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "SER_ID")
+    @EqualsAndHashCode.Include // Incluir solo el ID
+    @ToString.Include
     private Long serId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID")
-    private Usuario usuario;
+    @JsonIgnore
+    private Usuario usuario; // Mantener LAZY por defecto
 
     @Column(name = "SER_NOMBRE", length = 60)
     private String serNombre;
@@ -36,6 +43,7 @@ public class Servicio {
     @Column(name = "SER_ESTADO")
     private Boolean serEstado;
 
+    // Relaciones - Mantener LAZY por defecto
     @OneToMany(mappedBy = "servicio", fetch = FetchType.LAZY)
     private Set<Calificacion> calificaciones;
 

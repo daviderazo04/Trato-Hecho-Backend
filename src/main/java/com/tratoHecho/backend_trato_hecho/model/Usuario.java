@@ -1,5 +1,6 @@
 package com.tratoHecho.backend_trato_hecho.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
@@ -7,19 +8,25 @@ import java.util.Set;
 
 @Entity
 @Table(name = "USUARIO")
-@Data
+@Getter // Usar Getter
+@Setter // Usar Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true) // CLAVE: Solo usar campos explícitos para hashCode/equals
+@ToString(onlyExplicitlyIncluded = true) // Evita StackOverflow en logs
 public class Usuario {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "USER_ID")
+    @EqualsAndHashCode.Include // Incluir solo el ID
+    @ToString.Include
     private Long userId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ROL_ID")
-    private Rol rol;
+    @JsonIgnore
+    private Rol rol; // Mantener LAZY por defecto
 
     @Column(name = "USER_NOMBRECOMPLETO", length = 200)
     private String userNombreCompleto;
@@ -48,7 +55,7 @@ public class Usuario {
     @Column(name = "USER_ESTADO")
     private Boolean userEstado;
 
-    // Relaciones
+    // Relaciones - Mantener LAZY por defecto
     @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
     private Set<Servicio> servicios;
 

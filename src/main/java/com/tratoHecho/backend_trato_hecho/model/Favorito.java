@@ -5,21 +5,26 @@ import lombok.*;
 
 @Entity
 @Table(name = "FAVORITOS")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Favorito {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "FAV_ID")
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Long favId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID")
     private Usuario usuario;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SER_ID")
     private Servicio servicio;
 }

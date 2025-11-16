@@ -6,14 +6,19 @@ import java.util.Set;
 
 @Entity
 @Table(name = "MULTIMEDIA")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Multimedia {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "MUL_ID")
+    @EqualsAndHashCode.Include
+    @ToString.Include
     private Long mulId;
 
     @Column(name = "MUL_TIPO", length = 10)
