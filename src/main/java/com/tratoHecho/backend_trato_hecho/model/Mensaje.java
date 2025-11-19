@@ -32,9 +32,6 @@ public class Mensaje {
     @JsonIgnore
     private Usuario usuario;
 
-    @Column(name = "MSJ_IDEMISOR")
-    private Integer msjIdEmisor;
-
     @Column(name = "MSJ_CONTENIDO", columnDefinition = "TEXT")
     private String msjContenido;
 
