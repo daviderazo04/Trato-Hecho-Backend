@@ -20,26 +20,17 @@ public class ServicioController {
         this.servicioService = servicioService;
     }
 
-    /**
-     * Crear un nuevo servicio asociado a un usuario, categorías y multimedia
-     */
     @PostMapping
     public ResponseEntity<ServicioResponseDTO> crearServicio(@RequestBody ServicioRequestDTO dto) {
         ServicioResponseDTO nuevoServicio = servicioService.crearServicio(dto);
         return ResponseEntity.ok(nuevoServicio);
     }
 
-    /**
-     * (Opcional) Obtener todos los servicios creados
-     */
     @GetMapping
     public ResponseEntity<List<ServicioResponseDTO>> listarServicios() {
         return ResponseEntity.ok(servicioService.obtenerTodosDTO());
     }
 
-    /**
-     * (Opcional) Obtener un servicio por su ID
-     */
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(servicioService.obtenerPorId(id));

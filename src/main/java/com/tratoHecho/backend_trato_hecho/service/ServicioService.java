@@ -88,7 +88,6 @@ public class ServicioService {
                 .build();
     }
 
-    // ✅ evitar lazy recursivo, mapear DTO plano
     public List<ServicioResponseDTO> obtenerTodosDTO() {
         return servicioRepository.findAll().stream().map(s -> {
             List<String> categorias = categoriaServicioRepository.findByServicio(s)
