@@ -8,25 +8,34 @@ import java.util.Set;
 
 @Entity
 @Table(name = "USUARIO")
-@Getter // Usar Getter
-@Setter // Usar Setter
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(onlyExplicitlyIncluded = true) // CLAVE: Solo usar campos explícitos para hashCode/equals
-@ToString(onlyExplicitlyIncluded = true) // Evita StackOverflow en logs
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString(onlyExplicitlyIncluded = true)
 public class Usuario {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "USER_ID")
-    @EqualsAndHashCode.Include // Incluir solo el ID
+    @EqualsAndHashCode.Include
     @ToString.Include
     private Long userId;
 
+    /*
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ROL_ID")
     @JsonIgnore
-    private Rol rol; // Mantener LAZY por defecto
+    private Rol rol;
+    */
+
+    @Column(name = "USER_ROL", length = 15)
+    private String userRol;
+
+    @Column(name = "USER_FOTOPERFIL", columnDefinition = "TEXT")
+    private String userFotoPerfil;
 
     @Column(name = "USER_NOMBRECOMPLETO", length = 200)
     private String userNombreCompleto;
@@ -55,7 +64,6 @@ public class Usuario {
     @Column(name = "USER_ESTADO")
     private Boolean userEstado;
 
-    // Relaciones - Mantener LAZY por defecto
     @OneToMany(mappedBy = "usuario", fetch = FetchType.LAZY)
     private Set<Servicio> servicios;
 

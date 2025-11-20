@@ -31,11 +31,10 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> login(@RequestBody LoginDTO loginDTO) {
         return usuarioService.login(loginDTO)
                 .map(usuario -> {
-                    // 1. Mapear la Entidad al DTO de Respuesta
                     UsuarioLoginResponseDTO usuarioDTO = UsuarioLoginResponseDTO.builder()
                             .userId(usuario.getUserId())
-                            // Aseguramos que el rol esté cargado antes de acceder
-                            .rolId(usuario.getRol() != null ? usuario.getRol().getRolId() : null)
+                            .userRol(usuario.getUserRol())
+                            .userFotoPerfil(usuario.getUserFotoPerfil())
                             .userNombreCompleto(usuario.getUserNombreCompleto())
                             .userCorreo(usuario.getUserCorreo())
                             .userGenero(usuario.getUserGenero())
@@ -44,14 +43,12 @@ public class AuthController {
                             .userNombreUsuario(usuario.getUserNombreUsuario())
                             .userEstadoVerificado(usuario.getUserEstadoVerificado())
                             .userEstado(usuario.getUserEstado())
-                            // 2. Incluir las colecciones, que ahora están inicializadas
                             .servicios(usuario.getServicios())
                             .favoritos(usuario.getFavoritos())
                             .conversaciones(usuario.getConversaciones())
                             .mensajesRecibidos(usuario.getMensajesRecibidos())
                             .build();
 
-                    // 3. Devolver la respuesta con el DTO
                     Map<String, Object> response = new HashMap<>();
                     response.put("usuario", usuarioDTO);
                     response.put("mensaje", "Login exitoso");
