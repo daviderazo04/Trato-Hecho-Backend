@@ -65,7 +65,7 @@ public class FavoritoServiceImpl implements FavoritoService {
             return true; // Eliminado con éxito
         }
 
-        return false; // No existía
+        return false;
     }
 
     @Override
