@@ -7,7 +7,9 @@ import com.tratoHecho.backend_trato_hecho.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -22,11 +24,15 @@ public class ServicioService {
     private final CategoriaServicioRepository categoriaServicioRepository;
     private final MultimediaRepository multimediaRepository;
     private final ServicioMultimediaRepository servicioMultimediaRepository;
-    private final CalificacionRepository calificacionRepository; // <-- NUEVO: Para los promedios
+    private final CalificacionRepository calificacionRepository;
+
+    // Inyectamos el servicio de Firebase
+    private final FirebaseStorageService firebaseStorageService;
 
     @Transactional
-    public ServicioResponseDTO crearServicio(ServicioRequestDTO dto) {
+    public ServicioResponseDTO crearServicio(ServicioRequestDTO dto, List<MultipartFile> archivos) {
 
+        // 1. Crear el Servicio base (Datos de texto)
         Usuario usuario = usuarioRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + dto.getUserId()));
 
@@ -40,7 +46,7 @@ public class ServicioService {
 
         servicioRepository.save(servicio);
 
-        // Asociar categorías
+        // 2. Asociar categorías
         if (dto.getCategoriasIds() != null && !dto.getCategoriasIds().isEmpty()) {
             for (Long catId : dto.getCategoriasIds()) {
                 Categoria categoria = categoriaRepository.findById(catId)
@@ -55,49 +61,47 @@ public class ServicioService {
             }
         }
 
-        // Asociar multimedia existente
-        if (dto.getMultimedia() != null && !dto.getMultimedia().isEmpty()) {
-            dto.getMultimedia().forEach(media -> {
-                Multimedia multimedia = multimediaRepository.findById(media.getMulId())
-                        .orElseThrow(() -> new RuntimeException("Multimedia no encontrada con ID: " + media.getMulId()));
+        // 3. ✅ FLUJO VERIFICADO: SUBIR ARCHIVOS A FIREBASE Y GUARDAR URL
+        if (archivos != null && !archivos.isEmpty()) {
+            for (MultipartFile archivo : archivos) {
+                try {
+                    // A. Subir a Firebase y obtener URL pública
+                    String url = firebaseStorageService.uploadFile(archivo);
 
-                ServicioMultimedia sm = ServicioMultimedia.builder()
-                        .servicio(servicio)
-                        .multimedia(multimedia)
-                        .serMulLink(media.getUrl())
-                        .build();
+                    // B. Determinar tipo (IMAGEN o VIDEO)
+                    String tipo = archivo.getContentType().startsWith("video") ? "VIDEO" : "IMAGEN";
 
-                servicioMultimediaRepository.save(sm);
-            });
+                    // C. Crear registro de tipo Multimedia
+                    // (Idealmente aquí buscarías si ya existe el tipo para reutilizarlo, pero crear uno nuevo funciona)
+                    Multimedia multimedia = Multimedia.builder()
+                            .mulTipo(tipo)
+                            .build();
+                    multimediaRepository.save(multimedia);
+
+                    // D. Guardar en tabla intermedia SERVICIO_MULTIMEDIA
+                    ServicioMultimedia sm = ServicioMultimedia.builder()
+                            .servicio(servicio)
+                            .multimedia(multimedia)
+                            .serMulLink(url) // <-- AQUÍ SE GUARDA EL LINK DE FIREBASE EN LA BD
+                            .build();
+
+                    servicioMultimediaRepository.save(sm);
+
+                } catch (IOException e) {
+                    throw new RuntimeException("Error al subir archivo: " + archivo.getOriginalFilename(), e);
+                }
+            }
         }
 
-        // Refrescar listas para el retorno
-        List<String> categoriasNombres = categoriaServicioRepository.findByServicio(servicio)
-                .stream().map(cs -> cs.getCategoria().getCatNombre()).toList();
+        // 4. Mapear respuesta para devolver al frontend
+        return mapearAServicioDTO(servicio);
+    }
 
-        List<String> multimediaUrls = servicioMultimediaRepository.findByServicio(servicio)
-                .stream().map(ServicioMultimedia::getSerMulLink).toList();
-
-        // Construir respuesta
-        return ServicioResponseDTO.builder()
-                .id(servicio.getSerId())
-                .nombre(servicio.getSerNombre())
-                .descripcion(servicio.getSerDescripcion())
-                .precio(servicio.getSerPrecio())
-                .estado(servicio.getSerEstado())
-
-                // Datos Proveedor
-                .usuarioId(usuario.getUserId())
-                .usuarioNombre(usuario.getUserNombreCompleto())
-                .usuarioFoto(usuario.getUserFotoPerfil()) // <-- Nuevo campo
-
-                // Métricas (recién creado es 0)
-                .promedioCalificacion(0.0)
-                .totalCalificaciones(0)
-
-                .categorias(categoriasNombres)
-                .multimediaUrls(multimediaUrls)
-                .build();
+    @Transactional(readOnly = true)
+    public ServicioResponseDTO obtenerServicioDTOPorId(Long id) {
+        Servicio servicio = servicioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Servicio no encontrado con ID: " + id));
+        return mapearAServicioDTO(servicio);
     }
 
     @Transactional(readOnly = true)
@@ -105,29 +109,13 @@ public class ServicioService {
         return servicioRepository.findAll().stream().map(this::mapearAServicioDTO).toList();
     }
 
-    @Transactional(readOnly = true)
-    public ServicioResponseDTO obtenerServicioDTOPorId(Long id) {
-        Servicio servicio = servicioRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Servicio no encontrado con ID: " + id));
-
-        return mapearAServicioDTO(servicio);
-    }
-
-    public Optional<Servicio> obtenerPorId(Long id) {
-        return servicioRepository.findById(id);
-    }
-
-    // --- MÉTODO AUXILIAR PARA NO REPETIR CÓDIGO DE MAPEO ---
     private ServicioResponseDTO mapearAServicioDTO(Servicio s) {
-        // Obtener categorías
         List<String> categorias = categoriaServicioRepository.findByServicio(s)
                 .stream().map(cs -> cs.getCategoria().getCatNombre()).toList();
 
-        // Obtener multimedia
         List<String> multimedia = servicioMultimediaRepository.findByServicio(s)
                 .stream().map(ServicioMultimedia::getSerMulLink).toList();
 
-        // Calcular promedio
         Double promedio = calificacionRepository.obtenerPromedioPorServicio(s.getSerId());
         double promedioFinal = (promedio != null) ? promedio : 0.0;
 
@@ -137,16 +125,11 @@ public class ServicioService {
                 .descripcion(s.getSerDescripcion())
                 .precio(s.getSerPrecio())
                 .estado(s.getSerEstado())
-
-                // Datos Proveedor
                 .usuarioId(s.getUsuario().getUserId())
                 .usuarioNombre(s.getUsuario().getUserNombreCompleto())
                 .usuarioFoto(s.getUsuario().getUserFotoPerfil())
-
-                // Métricas
                 .promedioCalificacion(promedioFinal)
                 .totalCalificaciones(s.getCalificaciones() != null ? s.getCalificaciones().size() : 0)
-
                 .categorias(categorias)
                 .multimediaUrls(multimedia)
                 .build();
