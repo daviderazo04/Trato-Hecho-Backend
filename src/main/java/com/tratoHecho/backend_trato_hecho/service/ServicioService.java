@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +22,7 @@ public class ServicioService {
     private final CategoriaServicioRepository categoriaServicioRepository;
     private final MultimediaRepository multimediaRepository;
     private final ServicioMultimediaRepository servicioMultimediaRepository;
+    private final CalificacionRepository calificacionRepository; // <-- NUEVO: Para los promedios
 
     @Transactional
     public ServicioResponseDTO crearServicio(ServicioRequestDTO dto) {
@@ -69,46 +71,84 @@ public class ServicioService {
             });
         }
 
-        // DTO limpio usando los repositorios directamente
+        // Refrescar listas para el retorno
         List<String> categoriasNombres = categoriaServicioRepository.findByServicio(servicio)
                 .stream().map(cs -> cs.getCategoria().getCatNombre()).toList();
 
         List<String> multimediaUrls = servicioMultimediaRepository.findByServicio(servicio)
                 .stream().map(ServicioMultimedia::getSerMulLink).toList();
 
+        // Construir respuesta
         return ServicioResponseDTO.builder()
                 .id(servicio.getSerId())
                 .nombre(servicio.getSerNombre())
                 .descripcion(servicio.getSerDescripcion())
                 .precio(servicio.getSerPrecio())
                 .estado(servicio.getSerEstado())
+
+                // Datos Proveedor
+                .usuarioId(usuario.getUserId())
                 .usuarioNombre(usuario.getUserNombreCompleto())
+                .usuarioFoto(usuario.getUserFotoPerfil()) // <-- Nuevo campo
+
+                // Métricas (recién creado es 0)
+                .promedioCalificacion(0.0)
+                .totalCalificaciones(0)
+
                 .categorias(categoriasNombres)
                 .multimediaUrls(multimediaUrls)
                 .build();
     }
 
+    @Transactional(readOnly = true)
     public List<ServicioResponseDTO> obtenerTodosDTO() {
-        return servicioRepository.findAll().stream().map(s -> {
-            List<String> categorias = categoriaServicioRepository.findByServicio(s)
-                    .stream().map(cs -> cs.getCategoria().getCatNombre()).toList();
+        return servicioRepository.findAll().stream().map(this::mapearAServicioDTO).toList();
+    }
 
-            List<String> multimedia = servicioMultimediaRepository.findByServicio(s)
-                    .stream().map(ServicioMultimedia::getSerMulLink).toList();
+    @Transactional(readOnly = true)
+    public ServicioResponseDTO obtenerServicioDTOPorId(Long id) {
+        Servicio servicio = servicioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Servicio no encontrado con ID: " + id));
 
-            return ServicioResponseDTO.builder()
-                    .id(s.getSerId())
-                    .nombre(s.getSerNombre())
-                    .descripcion(s.getSerDescripcion())
-                    .precio(s.getSerPrecio())
-                    .usuarioNombre(s.getUsuario().getUserNombreCompleto())
-                    .categorias(categorias)
-                    .multimediaUrls(multimedia)
-                    .build();
-        }).toList();
+        return mapearAServicioDTO(servicio);
     }
 
     public Optional<Servicio> obtenerPorId(Long id) {
         return servicioRepository.findById(id);
+    }
+
+    // --- MÉTODO AUXILIAR PARA NO REPETIR CÓDIGO DE MAPEO ---
+    private ServicioResponseDTO mapearAServicioDTO(Servicio s) {
+        // Obtener categorías
+        List<String> categorias = categoriaServicioRepository.findByServicio(s)
+                .stream().map(cs -> cs.getCategoria().getCatNombre()).toList();
+
+        // Obtener multimedia
+        List<String> multimedia = servicioMultimediaRepository.findByServicio(s)
+                .stream().map(ServicioMultimedia::getSerMulLink).toList();
+
+        // Calcular promedio
+        Double promedio = calificacionRepository.obtenerPromedioPorServicio(s.getSerId());
+        double promedioFinal = (promedio != null) ? promedio : 0.0;
+
+        return ServicioResponseDTO.builder()
+                .id(s.getSerId())
+                .nombre(s.getSerNombre())
+                .descripcion(s.getSerDescripcion())
+                .precio(s.getSerPrecio())
+                .estado(s.getSerEstado())
+
+                // Datos Proveedor
+                .usuarioId(s.getUsuario().getUserId())
+                .usuarioNombre(s.getUsuario().getUserNombreCompleto())
+                .usuarioFoto(s.getUsuario().getUserFotoPerfil())
+
+                // Métricas
+                .promedioCalificacion(promedioFinal)
+                .totalCalificaciones(s.getCalificaciones() != null ? s.getCalificaciones().size() : 0)
+
+                .categorias(categorias)
+                .multimediaUrls(multimedia)
+                .build();
     }
 }

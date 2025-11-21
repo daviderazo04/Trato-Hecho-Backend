@@ -32,7 +32,12 @@ public class ServicioController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<?> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(servicioService.obtenerPorId(id));
+    public ResponseEntity<ServicioResponseDTO> getServiceById(@PathVariable Long id) {
+        try {
+            ServicioResponseDTO servicioDTO = servicioService.obtenerServicioDTOPorId(id);
+            return ResponseEntity.ok(servicioDTO);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

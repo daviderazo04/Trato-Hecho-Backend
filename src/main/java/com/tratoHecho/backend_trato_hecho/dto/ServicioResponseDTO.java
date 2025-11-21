@@ -14,7 +14,14 @@ public class ServicioResponseDTO {
     private String descripcion;
     private BigDecimal precio;
     private Boolean estado;
+    //Proveedor del servicio
+    private Long usuarioId;
     private String usuarioNombre;
+    private String usuarioFoto;
+    //Promedios
+    private Double promedioCalificacion;
+    private Integer totalCalificaciones;
+
     private List<String> categorias;
     private List<String> multimediaUrls;
 }
