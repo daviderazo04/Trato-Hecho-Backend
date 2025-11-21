@@ -1,17 +1,19 @@
 package com.tratoHecho.backend_trato_hecho.service.impl;
 
 import com.tratoHecho.backend_trato_hecho.dto.FavoritoRequestDTO;
+import com.tratoHecho.backend_trato_hecho.dto.ServicioResponseDTO;
 import com.tratoHecho.backend_trato_hecho.model.Favorito;
 import com.tratoHecho.backend_trato_hecho.model.Servicio;
+import com.tratoHecho.backend_trato_hecho.model.ServicioMultimedia;
 import com.tratoHecho.backend_trato_hecho.model.Usuario;
-import com.tratoHecho.backend_trato_hecho.repository.FavoritoRepository;
-import com.tratoHecho.backend_trato_hecho.repository.ServicioRepository;
-import com.tratoHecho.backend_trato_hecho.repository.UsuarioRepository;
+import com.tratoHecho.backend_trato_hecho.repository.*;
 import com.tratoHecho.backend_trato_hecho.service.FavoritoService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class FavoritoServiceImpl implements FavoritoService {
@@ -20,10 +22,23 @@ public class FavoritoServiceImpl implements FavoritoService {
     private final UsuarioRepository usuarioRepository;
     private final ServicioRepository servicioRepository;
 
-    public FavoritoServiceImpl(FavoritoRepository favoritoRepository, UsuarioRepository usuarioRepository, ServicioRepository servicioRepository) {
+    // Repositorios adicionales necesarios para construir el ServicioResponseDTO completo
+    private final CategoriaServicioRepository categoriaServicioRepository;
+    private final ServicioMultimediaRepository servicioMultimediaRepository;
+    private final CalificacionRepository calificacionRepository;
+
+    public FavoritoServiceImpl(FavoritoRepository favoritoRepository,
+                               UsuarioRepository usuarioRepository,
+                               ServicioRepository servicioRepository,
+                               CategoriaServicioRepository categoriaServicioRepository,
+                               ServicioMultimediaRepository servicioMultimediaRepository,
+                               CalificacionRepository calificacionRepository) {
         this.favoritoRepository = favoritoRepository;
         this.usuarioRepository = usuarioRepository;
         this.servicioRepository = servicioRepository;
+        this.categoriaServicioRepository = categoriaServicioRepository;
+        this.servicioMultimediaRepository = servicioMultimediaRepository;
+        this.calificacionRepository = calificacionRepository;
     }
 
     @Override
@@ -71,5 +86,58 @@ public class FavoritoServiceImpl implements FavoritoService {
     @Override
     public boolean esFavorito(Long userId, Long servicioId) {
         return favoritoRepository.existsByUsuario_UserIdAndServicio_SerId(userId, servicioId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ServicioResponseDTO> obtenerFavoritosPorUsuario(Long userId) {
+        // 1. Obtener la lista de entidades Favorito
+        List<Favorito> favoritos = favoritoRepository.findAllByUsuario_UserId(userId);
+
+        // 2. Transformar cada favorito en un ServicioResponseDTO limpio
+        return favoritos.stream()
+                .map(favorito -> mapearAServicioDTO(favorito.getServicio()))
+                .collect(Collectors.toList());
+    }
+
+
+    private ServicioResponseDTO mapearAServicioDTO(Servicio s) {
+        // Obtener nombres de categorías
+        List<String> categorias = categoriaServicioRepository.findByServicio(s)
+                .stream()
+                .map(cs -> cs.getCategoria().getCatNombre())
+                .collect(Collectors.toList());
+
+        // Obtener URLs de multimedia
+        List<String> multimedia = servicioMultimediaRepository.findByServicio(s)
+                .stream()
+                .map(ServicioMultimedia::getSerMulLink)
+                .collect(Collectors.toList());
+
+        // Calcular promedio
+        Double promedio = calificacionRepository.obtenerPromedioPorServicio(s.getSerId());
+        double promedioFinal = (promedio != null) ? promedio : 0.0;
+
+        // Construir DTO
+        return ServicioResponseDTO.builder()
+                .id(s.getSerId())
+                .nombre(s.getSerNombre())
+                .descripcion(s.getSerDescripcion())
+                .precio(s.getSerPrecio())
+                .estado(s.getSerEstado())
+
+                // Info Proveedor
+                .usuarioId(s.getUsuario().getUserId())
+                .usuarioNombre(s.getUsuario().getUserNombreCompleto())
+                .usuarioFoto(s.getUsuario().getUserFotoPerfil())
+
+                // Métricas
+                .promedioCalificacion(promedioFinal)
+                .totalCalificaciones(s.getCalificaciones() != null ? s.getCalificaciones().size() : 0)
+
+                // Listas
+                .categorias(categorias)
+                .multimediaUrls(multimedia)
+                .build();
     }
 }

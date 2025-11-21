@@ -1,11 +1,14 @@
 package com.tratoHecho.backend_trato_hecho.controller;
 
 import com.tratoHecho.backend_trato_hecho.dto.FavoritoRequestDTO;
+import com.tratoHecho.backend_trato_hecho.dto.ServicioResponseDTO;
 import com.tratoHecho.backend_trato_hecho.service.FavoritoService;
+import com.tratoHecho.backend_trato_hecho.service.impl.FavoritoServiceImpl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -50,5 +53,11 @@ public class FavoritoController {
     @GetMapping("/check/{userId}/{servicioId}")
     public ResponseEntity<Boolean> verificarFavorito(@PathVariable Long userId, @PathVariable Long servicioId) {
         return ResponseEntity.ok(favoritoService.esFavorito(userId, servicioId));
+    }
+
+    @GetMapping("/lista/{userId}")
+    public ResponseEntity<List<ServicioResponseDTO>> listarFavoritosPorUsuario(@PathVariable Long userId) {
+        List<ServicioResponseDTO> favoritos = favoritoService.obtenerFavoritosPorUsuario(userId);
+        return ResponseEntity.ok(favoritos);
     }
 }
