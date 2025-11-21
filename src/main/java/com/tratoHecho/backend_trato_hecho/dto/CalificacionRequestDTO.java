@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class CalificacionRequestDTO {
+    private Long userId;
     private Long servicioId;
     private Integer nota;
 }

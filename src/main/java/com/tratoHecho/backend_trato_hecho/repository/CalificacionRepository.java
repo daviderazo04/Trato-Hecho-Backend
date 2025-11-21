@@ -11,6 +11,8 @@ import java.util.List;
 @Repository
 public interface CalificacionRepository extends JpaRepository<Calificacion, Long> {
 
+    boolean existsByUsuario_UserIdAndServicio_SerId(Long userId, Long serId);
+
     List<Calificacion> findByServicio_SerId(Long serId);
 
     @Query("SELECT AVG(c.calNota) FROM Calificacion c WHERE c.servicio.serId = :serId")

@@ -1,6 +1,6 @@
 package com.tratoHecho.backend_trato_hecho.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,8 +23,13 @@ public class Calificacion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SER_ID")
-    @JsonIgnore
+    @JsonIgnoreProperties({"calificaciones", "favoritos", "usuario", "categorias", "multimedia", "hibernateLazyInitializer", "handler"})
     private Servicio servicio;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "USER_ID")
+    @JsonIgnoreProperties({"favoritos", "servicios", "conversaciones", "mensajesRecibidos", "hibernateLazyInitializer", "handler"})
+    private Usuario usuario;
 
     @Column(name = "CAL_NOTA")
     private Integer calNota;
