@@ -36,13 +36,10 @@ public class ServicioService {
     private final FirebaseStorageService firebaseStorageService;
     private final CacheManager cacheManager;
 
-    // --- CORRECCIÓN CRÍTICA DE CACHÉ ---
-    // Inyectamos el servicio a sí mismo para poder llamar a los métodos @Cacheable
-    // pasando por el proxy de Spring. Usamos @Lazy para evitar error de ciclo infinito al arrancar.
+    // Inyección cíclica segura para usar el Proxy de Caché
     @Autowired
     @Lazy
     private ServicioService self;
-    // -----------------------------------
 
     @Transactional
     public ServicioResponseDTO crearServicio(ServicioRequestDTO dto, List<MultipartFile> archivos) {
@@ -113,23 +110,26 @@ public class ServicioService {
         return nuevoDto;
     }
 
-    // --- MÉTODOS PÚBLICOS (Usan "self" para activar la caché) ---
+    // --- MÉTODOS PÚBLICOS (Lógica de Negocio + Caché) ---
 
+    // 1. Obtener por ID (con soporte de usuario opcional)
     public ServicioResponseDTO obtenerServicioDTOPorId(Long id, Long userId) {
-        // CORRECCIÓN: Usamos self.obtenerServicioDTOPorIdCached en lugar de llamar directo
+        // Trae de caché (rápido)
         ServicioResponseDTO dtoBase = self.obtenerServicioDTOPorIdCached(id);
 
+        // Si hay usuario, verificamos si es favorito
         if (userId != null) {
             boolean esFavorito = favoritoRepository.existsByUsuario_UserIdAndServicio_SerId(userId, id);
             return dtoBase.toBuilder().esFavorito(esFavorito).build();
         }
 
+        // Si no, devolvemos el base (esFavorito = false)
         return dtoBase.toBuilder().esFavorito(false).build();
     }
 
+    // 2. Obtener TODOS (con soporte de usuario opcional)
     public List<ServicioResponseDTO> obtenerTodosDTO(Long userId) {
-        // CORRECCIÓN: Usamos self.obtenerTodosDTOCached en lugar de llamar directo.
-        // Esto obliga a pasar por el proxy y leer la RAM.
+        // Trae la lista completa de la caché (rápido)
         List<ServicioResponseDTO> listaBase = self.obtenerTodosDTOCached();
 
         if (userId == null) {
@@ -138,6 +138,7 @@ public class ServicioService {
                     .collect(Collectors.toList());
         }
 
+        // Obtenemos IDs favoritos en una sola consulta ligera
         Set<Long> misFavoritosIds = favoritoRepository.findServicioIdsByUserId(userId);
 
         return listaBase.stream()
@@ -147,7 +148,24 @@ public class ServicioService {
                 .collect(Collectors.toList());
     }
 
-    // --- MÉTODOS PRIVADOS CACHEADOS ---
+    // 3. --- NUEVO MÉTODO: Obtener SOLO Favoritos de un Usuario (Usando la Caché) ---
+    public List<ServicioResponseDTO> obtenerFavoritosDeUsuario(Long userId) {
+        // Paso A: Obtener todos los servicios desde la RAM (Instantáneo)
+        List<ServicioResponseDTO> todosLosServicios = self.obtenerTodosDTOCached();
+
+        // Paso B: Obtener los IDs que el usuario ha marcado como favoritos (Rápido en BD)
+        Set<Long> idsFavoritos = favoritoRepository.findServicioIdsByUserId(userId);
+
+        // Paso C: Filtrar en memoria (Java Stream)
+        return todosLosServicios.stream()
+                // Solo dejamos pasar los servicios cuyo ID esté en el set de favoritos
+                .filter(dto -> idsFavoritos.contains(dto.getId()))
+                // Los marcamos como favoritos=true
+                .map(dto -> dto.toBuilder().esFavorito(true).build())
+                .collect(Collectors.toList());
+    }
+
+    // --- MÉTODOS PRIVADOS CACHEADOS (Low Level) ---
 
     @Transactional(readOnly = true)
     @Cacheable(value = "servicio_detalle", key = "#id")
