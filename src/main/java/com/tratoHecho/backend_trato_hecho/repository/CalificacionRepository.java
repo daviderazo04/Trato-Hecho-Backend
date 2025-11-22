@@ -17,4 +17,10 @@ public interface CalificacionRepository extends JpaRepository<Calificacion, Long
 
     @Query("SELECT AVG(c.calNota) FROM Calificacion c WHERE c.servicio.serId = :serId")
     Double obtenerPromedioPorServicio(@Param("serId") Long serId);
+
+
+    long countByServicio_Usuario_UserId(Long userId);
+
+    @Query("SELECT AVG(c.calNota) FROM Calificacion c WHERE c.servicio.usuario.userId = :userId")
+    Double obtenerPromedioGlobalDelProveedor(@Param("userId") Long userId);
 }

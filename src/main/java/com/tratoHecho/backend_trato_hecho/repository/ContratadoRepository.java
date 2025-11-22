@@ -12,7 +12,7 @@ import java.util.List;
 @Repository
 public interface ContratadoRepository extends JpaRepository<Contratado, Long> {
 
-    // VALIDACIÓN DE RANGO DE FECHAS (OVERLAP)
+    // VALIDACIÓN DE RANGO DE FECHAS
     // Verifica si existe alguna contratación para este servicio que se solape con las fechas dadas.
     // Lógica: Un evento A solapa con B si: (InicioA < FinB) Y (FinA > InicioB)
     @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Contratado c " +
@@ -30,4 +30,6 @@ public interface ContratadoRepository extends JpaRepository<Contratado, Long> {
 
     // 2. VENTAS: Donde yo soy el dueño del servicio
     List<Contratado> findByServicio_Usuario_UserIdOrderByContrFechaInicioDesc(Long userId);
+
+    long countByServicio_Usuario_UserId(Long userId);
 }
