@@ -9,7 +9,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/servicios")
@@ -47,6 +49,25 @@ public class ServicioController {
     @GetMapping("/favoritos/{userId}")
     public ResponseEntity<List<ServicioResponseDTO>> listarSoloFavoritos(@PathVariable Long userId) {
         return ResponseEntity.ok(servicioService.obtenerFavoritosDeUsuario(userId));
+    }
+
+    @GetMapping("/mis-servicios/{userId}")
+    public ResponseEntity<List<ServicioResponseDTO>> misServicios(@PathVariable Long userId) {
+        return ResponseEntity.ok(servicioService.obtenerMisServicios(userId));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> eliminarServicio(@PathVariable Long id, @RequestParam Long userId) {
+        try {
+            servicioService.eliminarServicio(id, userId);
+            Map<String, String> response = new HashMap<>();
+            response.put("mensaje", "Servicio eliminado correctamente (Estado cambiado a inactivo)");
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage()); // No es dueño
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build(); // No existe
+        }
     }
 
     @GetMapping("/{id}")

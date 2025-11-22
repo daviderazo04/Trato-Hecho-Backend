@@ -14,7 +14,6 @@ public interface ContratadoRepository extends JpaRepository<Contratado, Long> {
 
     // VALIDACIÓN DE RANGO DE FECHAS
     // Verifica si existe alguna contratación para este servicio que se solape con las fechas dadas.
-    // Lógica: Un evento A solapa con B si: (InicioA < FinB) Y (FinA > InicioB)
     @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Contratado c " +
             "WHERE c.servicio.serId = :serId " +
             "AND c.contrFechaInicio < :fechaFin " +
