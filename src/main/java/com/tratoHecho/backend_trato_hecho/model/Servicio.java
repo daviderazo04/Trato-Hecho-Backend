@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.Set;
+import java.util.HashSet;
 
 @Entity
 @Table(name = "SERVICIO")
@@ -43,16 +44,19 @@ public class Servicio {
     @Column(name = "SER_ESTADO")
     private Boolean serEstado;
 
-    // Relaciones - Mantener LAZY por defecto
     @OneToMany(mappedBy = "servicio", fetch = FetchType.LAZY)
-    private Set<Calificacion> calificaciones;
+    @Builder.Default // <-- ESTO ARREGLA EL ERROR
+    private Set<Calificacion> calificaciones = new HashSet<>();
 
     @OneToMany(mappedBy = "servicio", fetch = FetchType.LAZY)
-    private Set<Favorito> favoritos;
+    @Builder.Default // <-- ESTO ARREGLA EL ERROR
+    private Set<Favorito> favoritos = new HashSet<>();
 
     @OneToMany(mappedBy = "servicio", fetch = FetchType.LAZY)
-    private Set<CategoriaServicio> categorias;
+    @Builder.Default // <-- ESTO ARREGLA EL ERROR
+    private Set<CategoriaServicio> categorias = new HashSet<>();
 
     @OneToMany(mappedBy = "servicio", fetch = FetchType.LAZY)
-    private Set<ServicioMultimedia> multimedia;
+    @Builder.Default // <-- ESTO ARREGLA EL ERROR
+    private Set<ServicioMultimedia> multimedia = new HashSet<>();
 }
