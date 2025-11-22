@@ -1,9 +1,9 @@
 package com.tratoHecho.backend_trato_hecho.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "CONTRATADO")
@@ -24,14 +24,18 @@ public class Contratado {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SER_ID")
-    @JsonIgnore
+    @JsonIgnoreProperties({"contrataciones", "calificaciones", "favoritos", "usuario", "categorias", "multimedia", "hibernateLazyInitializer", "handler"})
     private Servicio servicio;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "USER_ID")
-    @JsonIgnore
+    @JsonIgnoreProperties({"contrataciones", "favoritos", "servicios", "conversaciones", "mensajesRecibidos", "hibernateLazyInitializer", "handler"})
     private Usuario usuario;
 
-    @Column(name = "CONTR_FECHACONTRATADO")
-    private LocalDate contrFechaContratado;
+    // --- NUEVOS CAMPOS ---
+    @Column(name = "CONTR_FECHAINI")
+    private LocalDateTime contrFechaInicio;
+
+    @Column(name = "CONTR_FECHAFIN")
+    private LocalDateTime contrFechaFin;
 }
