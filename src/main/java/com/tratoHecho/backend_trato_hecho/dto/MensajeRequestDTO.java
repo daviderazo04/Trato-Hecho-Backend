@@ -8,4 +8,5 @@ public class MensajeRequestDTO {
     private Long receiverId;  // Quién recibe (Mariachi) - Opcional si ya tienes conId
     private Long conId;       // ID de la conversación (Si ya existe)
     private String contenido; // "Hola"
+    private Long serId;      // ID del servicio relacionado
 }

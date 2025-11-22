@@ -7,10 +7,11 @@ import lombok.Data;
 @Builder
 public class InboxDTO {
     private Long conId;
-    private String chatName;   // Nombre del otro usuario (Mariachi El Sol)
-    private String chatImage;  // Foto del otro usuario
-    private String lastMessage;// Contenido del último mensaje
-    private int unreadCount;   // Para la burbuja individual del chat
-    private String subtitle;   // Rol o nombre real
-    private double rating;     // Rating del usuario
+    private String chatName;    // Ahora será el nombre del SERVICIO (ej: "Payaso Bombón")
+    private String chatImage;   // Foto del SERVICIO (o del usuario si no hay servicio)
+    private String lastMessage;
+    private int unreadCount;
+    private String subtitle;    // Nombre del PROVEEDOR (ej: "Jhon Tonsupa")
+    private double rating;
+    private Long serviceId;     // ID del servicio vinculado
 }

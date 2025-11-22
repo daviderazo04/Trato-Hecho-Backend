@@ -5,6 +5,8 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Entity
 @Table(name = "CONVERSACION")
 @Getter
@@ -21,6 +23,11 @@ public class Conversacion {
     @EqualsAndHashCode.Include
     @ToString.Include
     private Long conId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "SER_ID")
+    @JsonIgnore
+    private Servicio servicio;
 
     @Column(name = "CON_FECHACREACION")
     private LocalDateTime conFechaCreacion;

@@ -22,15 +22,22 @@ public class ChatService {
     private final ConversacionUsuarioRepository conversacionUsuarioRepository;
     private final MensajeRepository mensajeRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ServicioRepository servicioRepository;
 
-    // 1. Enviar Mensaje (Crea la sala si no existe)
+    // 1. Enviar Mensaje
     @Transactional
     public MensajeResponseDTO sendMessage(MensajeRequestDTO request) {
         Conversacion conversacion;
 
-        // A. Si no viene ID de conversación, buscamos si existe o creamos una
+        // Si es un chat nuevo
         if (request.getConId() == null || request.getConId() == 0) {
-            Optional<Conversacion> existing = conversacionRepository.findExistingConversation(request.getSenderId(), request.getReceiverId());
+            Optional<Conversacion> existing = Optional.empty();
+            
+            if (request.getSerId() != null) {
+                existing = conversacionRepository.findByUsersAndService(
+                        request.getSenderId(), request.getReceiverId(), request.getSerId());
+            }
+
             if (existing.isPresent()) {
                 conversacion = existing.get();
             } else {
@@ -38,35 +45,42 @@ public class ChatService {
                 conversacion = new Conversacion();
                 conversacion.setConFechaCreacion(LocalDateTime.now());
                 conversacion.setConFechaUltimoMensaje(LocalDateTime.now());
+                
+                if (request.getSerId() != null) {
+                    Servicio servicio = servicioRepository.findById(request.getSerId()).orElse(null);
+                    conversacion.setServicio(servicio);
+                }
+
                 conversacion = conversacionRepository.save(conversacion);
 
-                // VINCULAR A LOS DOS USUARIOS
                 Usuario sender = usuarioRepository.findById(request.getSenderId()).orElseThrow();
                 Usuario receiver = usuarioRepository.findById(request.getReceiverId()).orElseThrow();
 
-                createConversacionUsuario(conversacion, sender);
-                createConversacionUsuario(conversacion, receiver);
+                // --- CORRECCIÓN AQUÍ ---
+                // El que envía (sender) YA vio el chat: Fecha = Ahora
+                createConversacionUsuario(conversacion, sender, LocalDateTime.now());
+                
+                // El que recibe (receiver) NO lo ha visto: Fecha = Pasado (año 2000)
+                // Esto garantiza que el primer mensaje sea posterior a su "última visita"
+                createConversacionUsuario(conversacion, receiver, LocalDateTime.of(2000, 1, 1, 0, 0));
+                // -----------------------
             }
         } else {
             conversacion = conversacionRepository.findById(request.getConId()).orElseThrow();
         }
 
-        // B. Crear y Guardar el Mensaje
         Usuario sender = usuarioRepository.findById(request.getSenderId()).orElseThrow();
-        
         Mensaje mensaje = new Mensaje();
         mensaje.setConversacion(conversacion);
         mensaje.setUsuario(sender);
         mensaje.setMsjContenido(request.getContenido());
         mensaje.setMsjFechaEnvio(LocalDateTime.now());
-        
         mensajeRepository.save(mensaje);
 
-        // C. Actualizar fecha de la conversación (para que suba en la lista)
         conversacion.setConFechaUltimoMensaje(LocalDateTime.now());
         conversacionRepository.save(conversacion);
-
-        // D. Actualizar "Última Visita" SOLO del que envía (ya que él acaba de ver el chat al escribir)
+        
+        // Actualizamos la visita solo del que envía
         updateLastVisit(request.getSenderId(), conversacion.getConId());
 
         return MensajeResponseDTO.builder()
@@ -77,32 +91,17 @@ public class ChatService {
                 .senderName(sender.getUserNombreCompleto())
                 .build();
     }
-
-    private void createConversacionUsuario(Conversacion con, Usuario user) {
+    
+    // Método actualizado para recibir la fecha específica
+    private void createConversacionUsuario(Conversacion con, Usuario user, LocalDateTime fechaVisita) {
         ConversacionUsuario cu = new ConversacionUsuario();
         cu.setConversacion(con);
         cu.setUsuario(user);
-        cu.setConUserFechaUltimaVisita(LocalDateTime.now()); // Al crearse, ya lo viste
+        cu.setConUserFechaUltimaVisita(fechaVisita); 
         conversacionUsuarioRepository.save(cu);
     }
 
-    // 2. Obtener Historial de Mensajes de un Chat
-    public List<MensajeResponseDTO> getChatHistory(Long conId, Long userId) {
-        // Al pedir el historial, asumimos que el usuario está entrando al chat -> Actualizamos visita
-        updateLastVisit(userId, conId);
-
-        List<Mensaje> mensajes = mensajeRepository.findByConversacion_ConIdOrderByMsjFechaEnvioAsc(conId);
-        
-        return mensajes.stream().map(m -> MensajeResponseDTO.builder()
-                .msjId(m.getMsjId())
-                .contenido(m.getMsjContenido())
-                .fechaEnvio(m.getMsjFechaEnvio())
-                .senderId(m.getUsuario().getUserId())
-                .senderName(m.getUsuario().getUserNombreCompleto())
-                .build()).toList();
-    }
-
-    // 3. Obtener Inbox (Lista de chats para MessagesScreen)
+    // ... (Resto de métodos igual) ...
     public List<InboxDTO> getUserInbox(Long userId) {
         List<ConversacionUsuario> misChats = conversacionUsuarioRepository
                 .findByUsuario_UserIdOrderByConversacion_ConFechaUltimoMensajeDesc(userId);
@@ -112,7 +111,6 @@ public class ChatService {
         for (ConversacionUsuario cu : misChats) {
             Conversacion con = cu.getConversacion();
             
-            // Buscar al "Otro" usuario de la conversación
             ConversacionUsuario otroUsuarioCU = con.getUsuarios().stream()
                     .filter(u -> !u.getUsuario().getUserId().equals(userId))
                     .findFirst()
@@ -120,49 +118,79 @@ public class ChatService {
 
             if (otroUsuarioCU != null) {
                 Usuario otro = otroUsuarioCU.getUsuario();
-                
-                // Calcular mensajes sin leer para este chat específico
+                Servicio servicio = con.getServicio(); 
+
+                String displayName;
+                String displaySubtitle;
+                String displayImage;
+
+                if (servicio != null) {
+                    displayName = servicio.getSerNombre();
+                    displaySubtitle = otro.getUserNombreCompleto(); 
+                    
+                    if (servicio.getMultimedia() != null && !servicio.getMultimedia().isEmpty()) {
+                        displayImage = servicio.getMultimedia().iterator().next().getSerMulLink();
+                    } else {
+                        displayImage = otro.getUserFotoPerfil(); 
+                    }
+                } else {
+                    displayName = otro.getUserNombreCompleto();
+                    displaySubtitle = "Chat Directo"; 
+                    displayImage = otro.getUserFotoPerfil();
+                }
+
                 long unread = con.getMensajes().stream()
                         .filter(m -> m.getMsjFechaEnvio().isAfter(cu.getConUserFechaUltimaVisita()))
                         .count();
                 
-                // Obtener último mensaje
                 String lastMsg = con.getMensajes().stream()
-                        .reduce((first, second) -> second) // Obtener el último
+                        .reduce((first, second) -> second)
                         .map(Mensaje::getMsjContenido)
                         .orElse("Chat iniciado");
 
                 inboxList.add(InboxDTO.builder()
                         .conId(con.getConId())
-                        .chatName(otro.getUserNombreCompleto())
-                        // .chatImage(otro.getFoto()) // Si tienes foto
+                        .chatName(displayName)      
+                        .chatImage(displayImage)    
+                        .subtitle(displaySubtitle)  
                         .lastMessage(lastMsg)
                         .unreadCount((int) unread)
-                        .subtitle(otro.getUserNombreUsuario()) // O Rol
-                        .rating(4.5) // Puedes calcular esto real luego
+                        .rating(4.5) 
+                        .serviceId(servicio != null ? servicio.getSerId() : null)
                         .build());
             }
         }
         return inboxList;
     }
 
-    // 4. Verificar si hay mensajes sin leer globalmente (Para el MainNavigator)
+    public Long getConversationId(Long userId1, Long userId2, Long serId) {
+        if (serId != null && serId > 0) {
+            Optional<Conversacion> c = conversacionRepository.findByUsersAndService(userId1, userId2, serId);
+            return c.map(Conversacion::getConId).orElse(null);
+        }
+        return null; 
+    }
+    
+    public List<MensajeResponseDTO> getChatHistory(Long conId, Long userId) {
+        updateLastVisit(userId, conId);
+        List<Mensaje> mensajes = mensajeRepository.findByConversacion_ConIdOrderByMsjFechaEnvioAsc(conId);
+        return mensajes.stream().map(m -> MensajeResponseDTO.builder()
+                .msjId(m.getMsjId())
+                .contenido(m.getMsjContenido())
+                .fechaEnvio(m.getMsjFechaEnvio())
+                .senderId(m.getUsuario().getUserId())
+                .senderName(m.getUsuario().getUserNombreCompleto())
+                .build()).toList();
+    }
+
     public boolean hasUnreadMessagesGlobal(Long userId) {
         Long count = conversacionUsuarioRepository.countUnreadMessages(userId);
         return count > 0;
     }
 
-    public Long getConversationId(Long userId1, Long userId2) {
-        Optional<Conversacion> c = conversacionRepository.findExistingConversation(userId1, userId2);
-        // Si existe devuelve el ID, si no devuelve null
-        return c.map(Conversacion::getConId).orElse(null);
-    }
-
-    // Método auxiliar para marcar visto
     public void updateLastVisit(Long userId, Long conId) {
         Optional<ConversacionUsuario> cuOpt = conversacionUsuarioRepository
                 .findByUsuario_UserIdAndConversacion_ConId(userId, conId);
-        
         if (cuOpt.isPresent()) {
             ConversacionUsuario cu = cuOpt.get();
             cu.setConUserFechaUltimaVisita(LocalDateTime.now());

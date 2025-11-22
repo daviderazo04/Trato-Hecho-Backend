@@ -24,13 +24,11 @@ public class ChatController {
         return ResponseEntity.ok(chatService.sendMessage(request));
     }
 
-    // CORRECCIÓN 1: Agregamos ("userId")
     @GetMapping("/inbox/{userId}")
     public ResponseEntity<List<InboxDTO>> getUserInbox(@PathVariable("userId") Long userId) {
         return ResponseEntity.ok(chatService.getUserInbox(userId));
     }
 
-    // CORRECCIÓN 2: Agregamos ("conId") y ("userId")
     @GetMapping("/history/{conId}")
     public ResponseEntity<List<MensajeResponseDTO>> getChatHistory(
             @PathVariable("conId") Long conId, 
@@ -38,17 +36,18 @@ public class ChatController {
         return ResponseEntity.ok(chatService.getChatHistory(conId, userId));
     }
 
-    @GetMapping("/check/{receiverId}")
-    public ResponseEntity<Long> getConversationId(
-            @PathVariable("receiverId") Long receiverId,
-            @RequestParam("senderId") Long senderId) {
-        return ResponseEntity.ok(chatService.getConversationId(senderId, receiverId));
-    }
-    
-    // CORRECCIÓN 3: Agregamos ("userId")
     @GetMapping("/unread-status/{userId}")
     public ResponseEntity<Map<String, Boolean>> getUnreadStatus(@PathVariable("userId") Long userId) {
         boolean hasUnread = chatService.hasUnreadMessagesGlobal(userId);
         return ResponseEntity.ok(Map.of("hasUnread", hasUnread));
+    }
+
+    // --- ACTUALIZADO: Recibe serId opcional para verificar chat específico ---
+    @GetMapping("/check/{receiverId}")
+    public ResponseEntity<Long> getConversationId(
+            @PathVariable("receiverId") Long receiverId,
+            @RequestParam("senderId") Long senderId,
+            @RequestParam(value = "serId", required = false) Long serId) { // Nuevo parámetro
+        return ResponseEntity.ok(chatService.getConversationId(senderId, receiverId, serId));
     }
 }
