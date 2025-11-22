@@ -152,6 +152,12 @@ public class ChatService {
         return count > 0;
     }
 
+    public Long getConversationId(Long userId1, Long userId2) {
+        Optional<Conversacion> c = conversacionRepository.findExistingConversation(userId1, userId2);
+        // Si existe devuelve el ID, si no devuelve null
+        return c.map(Conversacion::getConId).orElse(null);
+    }
+
     // Método auxiliar para marcar visto
     public void updateLastVisit(Long userId, Long conId) {
         Optional<ConversacionUsuario> cuOpt = conversacionUsuarioRepository

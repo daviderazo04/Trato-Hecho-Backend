@@ -38,6 +38,13 @@ public class ChatController {
         return ResponseEntity.ok(chatService.getChatHistory(conId, userId));
     }
 
+    @GetMapping("/check/{receiverId}")
+    public ResponseEntity<Long> getConversationId(
+            @PathVariable("receiverId") Long receiverId,
+            @RequestParam("senderId") Long senderId) {
+        return ResponseEntity.ok(chatService.getConversationId(senderId, receiverId));
+    }
+    
     // CORRECCIÓN 3: Agregamos ("userId")
     @GetMapping("/unread-status/{userId}")
     public ResponseEntity<Map<String, Boolean>> getUnreadStatus(@PathVariable("userId") Long userId) {
