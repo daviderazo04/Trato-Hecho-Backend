@@ -24,4 +24,10 @@ public interface ContratadoRepository extends JpaRepository<Contratado, Long> {
                                                   @Param("fechaFin") LocalDateTime fechaFin);
 
     List<Contratado> findByUsuario_UserId(Long userId);
+
+    // 1. COMPRAS: Donde yo soy el cliente (user_id en tabla contratado)
+    List<Contratado> findByUsuario_UserIdOrderByContrFechaInicioDesc(Long userId);
+
+    // 2. VENTAS: Donde yo soy el dueño del servicio
+    List<Contratado> findByServicio_Usuario_UserIdOrderByContrFechaInicioDesc(Long userId);
 }
