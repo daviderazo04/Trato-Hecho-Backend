@@ -7,7 +7,7 @@ import java.util.List;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class ServicioResponseDTO {
     private Long id;
     private String nombre;
@@ -21,6 +21,8 @@ public class ServicioResponseDTO {
     //Promedios
     private Double promedioCalificacion;
     private Integer totalCalificaciones;
+
+    private Boolean esFavorito;
 
     private List<String> categorias;
     private List<String> multimediaUrls;

@@ -5,6 +5,8 @@ import com.tratoHecho.backend_trato_hecho.dto.ServicioResponseDTO;
 import com.tratoHecho.backend_trato_hecho.model.*;
 import com.tratoHecho.backend_trato_hecho.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
@@ -15,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,14 +31,20 @@ public class ServicioService {
     private final MultimediaRepository multimediaRepository;
     private final ServicioMultimediaRepository servicioMultimediaRepository;
     private final CalificacionRepository calificacionRepository;
+    private final FavoritoRepository favoritoRepository;
 
     private final FirebaseStorageService firebaseStorageService;
-
-    // Inyectamos el CacheManager para manipular la memoria manualmente
     private final CacheManager cacheManager;
 
+    // --- CORRECCIÓN CRÍTICA DE CACHÉ ---
+    // Inyectamos el servicio a sí mismo para poder llamar a los métodos @Cacheable
+    // pasando por el proxy de Spring. Usamos @Lazy para evitar error de ciclo infinito al arrancar.
+    @Autowired
+    @Lazy
+    private ServicioService self;
+    // -----------------------------------
+
     @Transactional
-    // ELIMINAMOS @CacheEvict para no borrar todo. Lo haremos manual.
     public ServicioResponseDTO crearServicio(ServicioRequestDTO dto, List<MultipartFile> archivos) {
 
         if (archivos != null && archivos.size() > 3) {
@@ -97,15 +106,52 @@ public class ServicioService {
         }
 
         ServicioResponseDTO nuevoDto = mapearAServicioDTO(servicio);
+        nuevoDto.setEsFavorito(false);
 
         actualizarCacheLista(nuevoDto);
 
         return nuevoDto;
     }
 
+    // --- MÉTODOS PÚBLICOS (Usan "self" para activar la caché) ---
+
+    public ServicioResponseDTO obtenerServicioDTOPorId(Long id, Long userId) {
+        // CORRECCIÓN: Usamos self.obtenerServicioDTOPorIdCached en lugar de llamar directo
+        ServicioResponseDTO dtoBase = self.obtenerServicioDTOPorIdCached(id);
+
+        if (userId != null) {
+            boolean esFavorito = favoritoRepository.existsByUsuario_UserIdAndServicio_SerId(userId, id);
+            return dtoBase.toBuilder().esFavorito(esFavorito).build();
+        }
+
+        return dtoBase.toBuilder().esFavorito(false).build();
+    }
+
+    public List<ServicioResponseDTO> obtenerTodosDTO(Long userId) {
+        // CORRECCIÓN: Usamos self.obtenerTodosDTOCached en lugar de llamar directo.
+        // Esto obliga a pasar por el proxy y leer la RAM.
+        List<ServicioResponseDTO> listaBase = self.obtenerTodosDTOCached();
+
+        if (userId == null) {
+            return listaBase.stream()
+                    .map(dto -> dto.toBuilder().esFavorito(false).build())
+                    .collect(Collectors.toList());
+        }
+
+        Set<Long> misFavoritosIds = favoritoRepository.findServicioIdsByUserId(userId);
+
+        return listaBase.stream()
+                .map(dto -> dto.toBuilder()
+                        .esFavorito(misFavoritosIds.contains(dto.getId()))
+                        .build())
+                .collect(Collectors.toList());
+    }
+
+    // --- MÉTODOS PRIVADOS CACHEADOS ---
+
     @Transactional(readOnly = true)
     @Cacheable(value = "servicio_detalle", key = "#id")
-    public ServicioResponseDTO obtenerServicioDTOPorId(Long id) {
+    public ServicioResponseDTO obtenerServicioDTOPorIdCached(Long id) {
         Servicio servicio = servicioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Servicio no encontrado con ID: " + id));
         return mapearAServicioDTO(servicio);
@@ -113,11 +159,13 @@ public class ServicioService {
 
     @Transactional(readOnly = true)
     @Cacheable(value = "servicios", key = "'all'")
-    public List<ServicioResponseDTO> obtenerTodosDTO() {
+    public List<ServicioResponseDTO> obtenerTodosDTOCached() {
         return servicioRepository.findAll().stream()
                 .map(this::mapearAServicioDTO)
                 .collect(Collectors.toList());
     }
+
+    // --- HELPERS ---
 
     private ServicioResponseDTO mapearAServicioDTO(Servicio s) {
         List<String> categorias = (s.getCategorias() != null) ? s.getCategorias().stream()
@@ -146,6 +194,7 @@ public class ServicioService {
                 .totalCalificaciones(totalCalificaciones)
                 .categorias(categorias)
                 .multimediaUrls(multimedia)
+                .esFavorito(false)
                 .build();
     }
 
@@ -153,12 +202,9 @@ public class ServicioService {
         Cache cache = cacheManager.getCache("servicios");
         if (cache != null) {
             List<ServicioResponseDTO> listaActual = cache.get("all", List.class);
-
             if (listaActual != null) {
                 List<ServicioResponseDTO> listaModificable = new ArrayList<>(listaActual);
-
                 listaModificable.add(nuevoServicio);
-
                 cache.put("all", listaModificable);
             }
         }

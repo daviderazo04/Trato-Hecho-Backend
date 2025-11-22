@@ -17,10 +17,11 @@ public class CacheWarmup {
 
     @EventListener(ApplicationReadyEvent.class)
     public void onApplicationReady() {
-        logger.info("Iniciando caché de Servicios...");
+        logger.info("Iniciando de caché de Servicios...");
         long inicio = System.currentTimeMillis();
 
-        servicioService.obtenerTodosDTO();
+
+        servicioService.obtenerTodosDTOCached();
 
         long fin = System.currentTimeMillis();
         logger.info("Caché de Servicios lista. Tiempo de carga: {} ms", (fin - inicio));
