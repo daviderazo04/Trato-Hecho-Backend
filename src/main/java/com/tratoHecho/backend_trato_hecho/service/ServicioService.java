@@ -36,13 +36,12 @@ public class ServicioService {
     private final FirebaseStorageService firebaseStorageService;
     private final CacheManager cacheManager;
 
-    // Inyección para el Proxy de Caché (Self-Invocation)
     @Autowired
     @Lazy
     private ServicioService self;
 
     // --------------------------------------------------------------------------------
-    // MÉTODOS DE ESCRITURA (Crear / Eliminar)
+    // MÉTODOS DE ESCRITURA
     // --------------------------------------------------------------------------------
 
     @Transactional
@@ -65,7 +64,6 @@ public class ServicioService {
 
         servicioRepository.save(servicio);
 
-        // Asociar Categorías
         if (dto.getCategoriasIds() != null && !dto.getCategoriasIds().isEmpty()) {
             for (Long catId : dto.getCategoriasIds()) {
                 Categoria categoria = categoriaRepository.findById(catId)
@@ -77,12 +75,10 @@ public class ServicioService {
                         .build();
 
                 categoriaServicioRepository.save(cs);
-                // Actualizamos objeto en memoria para el DTO
                 servicio.getCategorias().add(cs);
             }
         }
 
-        // Subir Archivos
         if (archivos != null && !archivos.isEmpty()) {
             for (MultipartFile archivo : archivos) {
                 try {
@@ -99,7 +95,6 @@ public class ServicioService {
                             .build();
 
                     servicioMultimediaRepository.save(sm);
-                    // Actualizamos objeto en memoria para el DTO
                     servicio.getMultimedia().add(sm);
 
                 } catch (IOException e) {
@@ -111,7 +106,6 @@ public class ServicioService {
         ServicioResponseDTO nuevoDto = mapearAServicioDTO(servicio);
         nuevoDto.setEsFavorito(false);
 
-        // Actualizar caché manualmente si el servicio está activo
         if (Boolean.TRUE.equals(servicio.getSerEstado())) {
             actualizarCacheLista(nuevoDto);
         }
@@ -128,59 +122,57 @@ public class ServicioService {
             throw new IllegalArgumentException("No tienes permiso para eliminar este servicio");
         }
 
-        // Soft Delete
         servicio.setSerEstado(false);
         servicioRepository.save(servicio);
 
-        // Sacar de la caché pública
         eliminarDeCacheLista(servicioId);
     }
 
     // --------------------------------------------------------------------------------
-    // MÉTODOS PÚBLICOS DE LECTURA (Lógica de Negocio + Personalización)
+    // MÉTODOS PÚBLICOS DE LECTURA
     // --------------------------------------------------------------------------------
 
     public ServicioResponseDTO obtenerServicioDTOPorId(Long id, Long userId) {
-        // 1. Obtener base desde caché
         ServicioResponseDTO dtoBase = self.obtenerServicioDTOPorIdCached(id);
 
-        // 2. Personalizar favorito
         if (userId != null) {
             boolean esFavorito = favoritoRepository.existsByUsuario_UserIdAndServicio_SerId(userId, id);
-            // Aquí usamos el .toBuilder() que habilitamos en el DTO
             return dtoBase.toBuilder().esFavorito(esFavorito).build();
         }
         return dtoBase.toBuilder().esFavorito(false).build();
     }
 
+    // --- AQUÍ ESTÁ EL CAMBIO CLAVE ---
     public List<ServicioResponseDTO> obtenerTodosDTO(Long userId) {
-        // 1. Obtener lista base desde caché
+        // 1. Traer la lista completa de la caché (Instantáneo)
         List<ServicioResponseDTO> listaBase = self.obtenerTodosDTOCached();
 
+        // 2. Si no hay usuario (visitante), mostrar todo (menos inactivos que ya filtra la caché)
         if (userId == null) {
             return listaBase.stream()
                     .map(dto -> dto.toBuilder().esFavorito(false).build())
                     .collect(Collectors.toList());
         }
 
-        // 2. Marcar favoritos
+        // 3. Si hay usuario (cliente), aplicamos lógica de personalización
         Set<Long> misFavoritosIds = favoritoRepository.findServicioIdsByUserId(userId);
 
         return listaBase.stream()
+                // FILTRO: Excluir servicios donde el proveedor sea el mismo usuario que consulta
+                .filter(dto -> !dto.getUsuarioId().equals(userId))
+                // MAPEO: Marcar favoritos
                 .map(dto -> dto.toBuilder()
                         .esFavorito(misFavoritosIds.contains(dto.getId()))
                         .build())
                 .collect(Collectors.toList());
     }
 
-    // Obtener "Mis Servicios" (Para el proveedor, incluye solo activos según tu último requerimiento)
     public List<ServicioResponseDTO> obtenerMisServicios(Long userId) {
         return servicioRepository.findByUsuario_UserIdAndSerEstadoTrue(userId).stream()
                 .map(this::mapearAServicioDTO)
                 .collect(Collectors.toList());
     }
 
-    // Obtener Solo Favoritos (Usando caché)
     public List<ServicioResponseDTO> obtenerFavoritosDeUsuario(Long userId) {
         List<ServicioResponseDTO> todos = self.obtenerTodosDTOCached();
         Set<Long> idsFavoritos = favoritoRepository.findServicioIdsByUserId(userId);
@@ -206,14 +198,13 @@ public class ServicioService {
     @Transactional(readOnly = true)
     @Cacheable(value = "servicios", key = "'all'")
     public List<ServicioResponseDTO> obtenerTodosDTOCached() {
-        // IMPORTANTE: Caché pública solo tiene servicios ACTIVOS
         return servicioRepository.findBySerEstadoTrue().stream()
                 .map(this::mapearAServicioDTO)
                 .collect(Collectors.toList());
     }
 
     // --------------------------------------------------------------------------------
-    // HELPERS Y ACTUALIZACIÓN DE CACHÉ
+    // HELPERS
     // --------------------------------------------------------------------------------
 
     private ServicioResponseDTO mapearAServicioDTO(Servicio s) {
@@ -243,7 +234,7 @@ public class ServicioService {
                 .totalCalificaciones(totalCalificaciones)
                 .categorias(categorias)
                 .multimediaUrls(multimedia)
-                .esFavorito(false) // Valor base
+                .esFavorito(false)
                 .build();
     }
 
