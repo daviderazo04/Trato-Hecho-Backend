@@ -4,9 +4,11 @@ import com.tratoHecho.backend_trato_hecho.dto.ContratarServicioDTO;
 import com.tratoHecho.backend_trato_hecho.dto.ContratoDetalleDTO;
 import com.tratoHecho.backend_trato_hecho.dto.HistorialTransaccionesDTO;
 import com.tratoHecho.backend_trato_hecho.dto.ServicioResponseDTO;
+import com.tratoHecho.backend_trato_hecho.model.Calificacion;
 import com.tratoHecho.backend_trato_hecho.model.Contratado;
 import com.tratoHecho.backend_trato_hecho.model.Servicio;
 import com.tratoHecho.backend_trato_hecho.model.Usuario;
+import com.tratoHecho.backend_trato_hecho.repository.CalificacionRepository;
 import com.tratoHecho.backend_trato_hecho.repository.ContratadoRepository;
 import com.tratoHecho.backend_trato_hecho.repository.ServicioRepository;
 import com.tratoHecho.backend_trato_hecho.repository.UsuarioRepository;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,23 +30,26 @@ public class ContratadoServiceImpl implements ContratadoService {
     private final UsuarioRepository usuarioRepository;
     private final ServicioRepository servicioRepository;
 
-    // Inyectamos ServicioService para reutilizar el mapeo DTO completo (con caché y promedios)
+    // Inyectamos CalificacionRepository para buscar las notas
+    private final CalificacionRepository calificacionRepository;
+
     private final ServicioService servicioService;
 
     public ContratadoServiceImpl(ContratadoRepository contratadoRepository,
                                  UsuarioRepository usuarioRepository,
                                  ServicioRepository servicioRepository,
+                                 CalificacionRepository calificacionRepository,
                                  @Lazy ServicioService servicioService) {
         this.contratadoRepository = contratadoRepository;
         this.usuarioRepository = usuarioRepository;
         this.servicioRepository = servicioRepository;
+        this.calificacionRepository = calificacionRepository;
         this.servicioService = servicioService;
     }
 
     @Override
     @Transactional
     public void contratarServicio(ContratarServicioDTO dto) {
-        // 1. Validaciones de Fecha
         if (dto.getFechaInicio().isAfter(dto.getFechaFin())) {
             throw new IllegalArgumentException("La fecha de inicio no puede ser posterior a la fecha de fin.");
         }
@@ -51,7 +57,6 @@ public class ContratadoServiceImpl implements ContratadoService {
             throw new IllegalArgumentException("No puedes contratar servicios en el pasado.");
         }
 
-        // 2. Validar Disponibilidad
         boolean ocupado = contratadoRepository.existsByServicioIdAndDateRangeOverlap(
                 dto.getServicioId(),
                 dto.getFechaInicio(),
@@ -62,7 +67,6 @@ public class ContratadoServiceImpl implements ContratadoService {
             throw new IllegalArgumentException("El servicio ya está reservado en el horario seleccionado.");
         }
 
-        // 3. Buscar y Validar Entidades
         Usuario usuario = usuarioRepository.findById(dto.getUserId())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -77,7 +81,6 @@ public class ContratadoServiceImpl implements ContratadoService {
             throw new IllegalArgumentException("No puedes contratar tu propio servicio.");
         }
 
-        // 4. Guardar
         Contratado contratacion = Contratado.builder()
                 .usuario(usuario)
                 .servicio(servicio)
@@ -92,16 +95,18 @@ public class ContratadoServiceImpl implements ContratadoService {
     @Transactional(readOnly = true)
     public HistorialTransaccionesDTO obtenerHistorialPorUsuario(Long userId) {
 
-        // A. Obtener COMPRAS (Donde soy Cliente)
+        // A. Obtener COMPRAS (Yo soy el cliente)
         List<Contratado> misCompras = contratadoRepository.findByUsuario_UserIdOrderByContrFechaInicioDesc(userId);
 
         List<ContratoDetalleDTO> comprasDTO = misCompras.stream().map(c -> {
-            // La contraparte es el Vendedor (Dueño del servicio)
             Usuario vendedor = c.getServicio().getUsuario();
-
-            // Reutilizamos el servicioService para obtener el DTO del servicio completo y optimizado
-            // Pasamos 'userId' para que el campo 'esFavorito' se calcule correctamente para mí
             ServicioResponseDTO servicioDTO = servicioService.obtenerServicioDTOPorId(c.getServicio().getSerId(), userId);
+
+            // --- LÓGICA DE CALIFICACIÓN (COMPRA) ---
+            // Verificamos si YO (userId) ya califiqué este servicio
+            Optional<Calificacion> miCalificacion = calificacionRepository.findByUsuario_UserIdAndServicio_SerId(userId, c.getServicio().getSerId());
+            boolean yaCalificado = miCalificacion.isPresent();
+            Integer miNota = miCalificacion.map(Calificacion::getCalNota).orElse(null);
 
             return ContratoDetalleDTO.builder()
                     .contratoId(c.getContrId())
@@ -112,20 +117,24 @@ public class ContratadoServiceImpl implements ContratadoService {
                     .contraparteFoto(vendedor.getUserFotoPerfil())
                     .contraparteRolEnTransaccion("VENDEDOR")
                     .servicio(servicioDTO)
+                    // Nuevos campos
+                    .yaCalificado(yaCalificado)
+                    .miNota(miNota)
                     .build();
         }).collect(Collectors.toList());
 
-        // B. Obtener VENTAS (Donde soy Vendedor)
+        // B. Obtener VENTAS (Yo soy el proveedor)
         List<Contratado> misVentas = contratadoRepository.findByServicio_Usuario_UserIdOrderByContrFechaInicioDesc(userId);
 
         List<ContratoDetalleDTO> ventasDTO = misVentas.stream().map(c -> {
-            // La contraparte es el Comprador (Cliente)
             Usuario comprador = c.getUsuario();
-
-            // Obtenemos el DTO del servicio.
-            // Nota: 'esFavorito' aquí reflejará si YO (vendedor) tengo mi propio servicio en favoritos,
-            // lo cual es técnicamente correcto según la lógica de reuse.
             ServicioResponseDTO servicioDTO = servicioService.obtenerServicioDTOPorId(c.getServicio().getSerId(), userId);
+
+            // --- LÓGICA DE CALIFICACIÓN (VENTA) ---
+            // Verificamos si el COMPRADOR (contraparte) ya calificó mi servicio
+            Optional<Calificacion> calificacionCliente = calificacionRepository.findByUsuario_UserIdAndServicio_SerId(comprador.getUserId(), c.getServicio().getSerId());
+            boolean yaCalificado = calificacionCliente.isPresent();
+            Integer notaCliente = calificacionCliente.map(Calificacion::getCalNota).orElse(null);
 
             return ContratoDetalleDTO.builder()
                     .contratoId(c.getContrId())
@@ -136,10 +145,12 @@ public class ContratadoServiceImpl implements ContratadoService {
                     .contraparteFoto(comprador.getUserFotoPerfil())
                     .contraparteRolEnTransaccion("COMPRADOR")
                     .servicio(servicioDTO)
+                    // Nuevos campos (indican si el cliente ya me calificó)
+                    .yaCalificado(yaCalificado)
+                    .miNota(notaCliente)
                     .build();
         }).collect(Collectors.toList());
 
-        // C. Retornar el objeto agrupado
         return HistorialTransaccionesDTO.builder()
                 .compras(comprasDTO)
                 .ventas(ventasDTO)

@@ -73,35 +73,44 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@RequestBody LoginDTO loginDTO) {
-        return usuarioService.login(loginDTO)
-                .map(usuario -> {
-                    UsuarioLoginResponseDTO usuarioDTO = UsuarioLoginResponseDTO.builder()
-                            .userId(usuario.getUserId())
-                            .userRol(usuario.getUserRol())
-                            .userFotoPerfil(usuario.getUserFotoPerfil())
-                            .userNombreCompleto(usuario.getUserNombreCompleto())
-                            .userCorreo(usuario.getUserCorreo())
-                            .userGenero(usuario.getUserGenero())
-                            .userFechaNacimiento(usuario.getUserFechaNacimiento())
-                            .userTelefono(usuario.getUserTelefono())
-                            .userNombreUsuario(usuario.getUserNombreUsuario())
-                            .userEstadoVerificado(usuario.getUserEstadoVerificado())
-                            .userEstado(usuario.getUserEstado())
-                            .servicios(usuario.getServicios())
-                            .favoritos(usuario.getFavoritos())
-                            .conversaciones(usuario.getConversaciones())
-                            .mensajesRecibidos(usuario.getMensajesRecibidos())
-                            .build();
+        try {
+            return usuarioService.login(loginDTO)
+                    .map(usuario -> {
+                        UsuarioLoginResponseDTO usuarioDTO = UsuarioLoginResponseDTO.builder()
+                                .userId(usuario.getUserId())
+                                .userRol(usuario.getUserRol())
+                                .userFotoPerfil(usuario.getUserFotoPerfil())
+                                .userNombreCompleto(usuario.getUserNombreCompleto())
+                                .userCorreo(usuario.getUserCorreo())
+                                .userGenero(usuario.getUserGenero())
+                                .userFechaNacimiento(usuario.getUserFechaNacimiento())
+                                .userTelefono(usuario.getUserTelefono())
+                                .userNombreUsuario(usuario.getUserNombreUsuario())
+                                .userEstadoVerificado(usuario.getUserEstadoVerificado())
+                                .userEstado(usuario.getUserEstado())
+                                .servicios(usuario.getServicios())
+                                .favoritos(usuario.getFavoritos())
+                                .conversaciones(usuario.getConversaciones())
+                                .mensajesRecibidos(usuario.getMensajesRecibidos())
+                                .build();
 
-                    Map<String, Object> response = new HashMap<>();
-                    response.put("usuario", usuarioDTO);
-                    response.put("mensaje", "Login exitoso");
-                    return ResponseEntity.ok(response);
-                })
-                .orElseGet(() -> {
-                    Map<String, Object> response = new HashMap<>();
-                    response.put("mensaje", "Credenciales inválidas");
-                    return ResponseEntity.badRequest().body(response);
-                });
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("usuario", usuarioDTO);
+                        response.put("mensaje", "Login exitoso");
+                        return ResponseEntity.ok(response);
+                    })
+                    .orElseGet(() -> {
+                        // Esto ocurre si el Optional viene vacío (contraseña incorrecta)
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("mensaje", "Credenciales inválidas"); // Mensaje para contraseña errónea
+                        return ResponseEntity.badRequest().body(response);
+                    });
+
+        } catch (IllegalArgumentException e) {
+            // Esto captura la excepción "El usuario no existe" lanzada desde el servicio
+            Map<String, Object> response = new HashMap<>();
+            response.put("mensaje", e.getMessage()); // Mensaje: "El usuario no existe"
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 }

@@ -124,12 +124,19 @@ public class UsuarioServiceImpl implements UsuarioService {
     @Override
     @Transactional
     public Optional<Usuario> login(LoginDTO loginDTO) {
-        Optional<Usuario> optionalUsuario = findByNombreUsuario(loginDTO.getNombreUsuario())
-                .filter(usuario -> usuario.getUserContrasenia().equals(loginDTO.getContrasenia()));
+        // 1. Buscamos al usuario primero para saber si existe
+        Usuario usuario = usuarioRepository.findByUserNombreUsuario(loginDTO.getNombreUsuario())
+                .orElseThrow(() -> new IllegalArgumentException("El usuario no existe"));
 
-        optionalUsuario.ifPresent(this::initializeAllData);
+        // 2. Verificamos la contraseña
+        if (!usuario.getUserContrasenia().equals(loginDTO.getContrasenia())) {
+            // Si la contraseña no coincide, retornamos vacío para que el controlador diga "Credenciales inválidas"
+            return Optional.empty();
+        }
 
-        return optionalUsuario;
+        // 3. Si todo ok, inicializamos datos y retornamos
+        initializeAllData(usuario);
+        return Optional.of(usuario);
     }
 
     @Override

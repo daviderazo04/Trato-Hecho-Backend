@@ -25,4 +25,7 @@ public class ContratoDetalleDTO {
 
     // El servicio completo (con fotos, promedios, etc.)
     private ServicioResponseDTO servicio;
+
+    private Boolean yaCalificado;
+    private Integer miNota;
 }
