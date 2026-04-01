@@ -42,6 +42,13 @@ dependencies {
 
     implementation 'com.sksamuel.scrimage:scrimage-core:4.1.3'
     implementation 'com.sksamuel.scrimage:scrimage-webp:4.1.3'
+
+    //Monitoreo
+    // 1. Actuator: Recolecta las métricas de la JVM, base de datos, HTTP, etc.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // 2. Micrometer Prometheus: Traduce las métricas al formato de texto de Prometheus
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 }
 
 tasks.named('test') {
